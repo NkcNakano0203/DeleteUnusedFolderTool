@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:DeleteUnusedFolderTool"
         mc:Ignorable="d"
-        Title="UnusedFolderDeleteTool" Height="200" Width="400" AllowDrop="True" Drop="OnDropedFile" Background="{x:Null}"  Closed="OnClosedApplication">
+        Title="DeleteUnusedFolderTool" Height="200" Width="400" AllowDrop="True" Drop="OnDropedFile" Background="{x:Null}"  Closed="OnClosedApplication">
     <Grid Drop="OnDropedFile" Background="White">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto"/>

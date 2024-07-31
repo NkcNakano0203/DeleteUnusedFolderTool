@@ -9,9 +9,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="LivetCask.Mvvm" Version="4.0.2" />
     <PackageReference Include="WindowsAPICodePack-Core" Version="1.1.2">
       <NoWarn>NU1701</NoWarn>
+      <PrivateAssets></PrivateAssets>
     </PackageReference>
     <PackageReference Include="WindowsAPICodePack-Shell" Version="1.1.1">
       <NoWarn>NU1701</NoWarn>
