@@ -1,8 +1,8 @@
-﻿using System.Diagnostics;
+﻿using Microsoft.WindowsAPICodePack.Dialogs;
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
-using Microsoft.WindowsAPICodePack.Dialogs;
 
 namespace DeleteUnusedFolderTool
 {
@@ -13,19 +13,26 @@ namespace DeleteUnusedFolderTool
     {
         private readonly string[] deleteFolderNames =
         [
+            ".vs",
             "Library",
             "Logs",
             "obj",
+            "Temp",
             "UserSettings"
         ];
 
-        private string[] folderPaths = Array.Empty<string>();
+        private string[] folderPaths = [];
 
-        private readonly CancellationTokenSource cts = new();
+        private readonly CancellationTokenSource cts;
+
+        private int currentProcessValue;
+
+        private readonly object lockObject = new();
 
         public MainWindow()
         {
             InitializeComponent();
+            cts = new CancellationTokenSource();
         }
 
         private void OnClickedTopCheckBox(object sender, RoutedEventArgs e)
@@ -51,7 +58,7 @@ namespace DeleteUnusedFolderTool
             SetFilePathText(folderPaths);
         }
 
-        private bool IsFolder(IDataObject data)
+        private static bool IsFolder(IDataObject data)
         {
             // フォルダか
             if (!data.GetDataPresent(DataFormats.FileDrop)) return false;
@@ -78,7 +85,7 @@ namespace DeleteUnusedFolderTool
             if (cofd.ShowDialog() != CommonFileDialogResult.Ok) return;
 
             // フォルダのパスを格納
-            folderPaths = (string[])cofd.FileNames;
+            folderPaths = cofd.FileNames.ToArray();
 
             SetFilePathText(folderPaths);
         }
@@ -99,52 +106,89 @@ namespace DeleteUnusedFolderTool
             DeleteButton.IsEnabled = folderPaths.Length > 0;
         }
 
-        private void OnClickedDeleteButton(object sender, RoutedEventArgs e)
+        private async void OnClickedDeleteButton(object sender, RoutedEventArgs e)
         {
             if (folderPaths == null) return;
             if (folderPaths.Length == 0) return;
 
-            Task.Run(() => DeleteFoldersAsync(folderPaths));
+            await DeleteFoldersAsync(folderPaths);
         }
 
         private async Task DeleteFoldersAsync(string[] folders)
         {
-            // 複数プロジェクトを処理
-            foreach (string unityProjectPath in folders)
+            DeleteButton.IsEnabled = false;
+
+            int maxProcessValue = folders.Length * deleteFolderNames.Length;
+            ProcessProgressBar.Maximum = maxProcessValue;
+            currentProcessValue = 0;
+
+            // マルチスレッド処理の設定
+            ParallelOptions options = new()
             {
-                // マルチスレッド処理の設定
-                ParallelOptions options = new()
-                {
-                    CancellationToken = cts.Token,
-                    MaxDegreeOfParallelism = deleteFolderNames.Length
-                };
+                CancellationToken = cts.Token,
+                MaxDegreeOfParallelism = deleteFolderNames.Length
+            };
 
-                // 非同期でフォルダを平行して削除
-                await Task.Run(() => DeleteFoldersConcurrently(unityProjectPath, options));
-            }
+            // 非同期でフォルダを平行して削除
+            await DeleteProcessAsync(folders, options);
 
+            ProcessProgressBar.Value = ProcessProgressBar.Maximum;
             MessageBox.Show("削除が完了しました。");
+            DeleteButton.IsEnabled = true;
         }
 
-        private void DeleteFoldersConcurrently(string unityProjectPath, ParallelOptions options)
+        private async Task DeleteProcessAsync(string[] unityProjectPaths, ParallelOptions options)
         {
-            // マルチスレッドで中間フォルダを削除
-            Parallel.ForEach(folderPaths, options, unityProjectPaths =>
+            // 非同期マルチスレッドでフォルダを削除
+            await Parallel.ForEachAsync(
+                unityProjectPaths,
+                cts.Token,
+                async (unityProjectPath, CancellationToken) =>
             {
                 foreach (var deleteFolderName in deleteFolderNames)
                 {
-                    string folderPath = Path.Combine(unityProjectPath, deleteFolderName);
+                    currentProcessValue++;
 
-                    if (Directory.Exists(folderPath))
+                    string directory = Path.Combine(unityProjectPath, deleteFolderName);
+
+                    if (!Directory.Exists(directory)) continue;
+
+                    Debug.Print($"消すフォルダパス：{directory}");
+
+                    // フォルダを削除
+                    ProcessStartInfo processStartInfo = new()
                     {
-                        Debug.Print($"消すフォルダパス：{folderPath}");
-                        // フォルダを削除
-                        Directory.Delete(folderPath, true);
+                        FileName = "cmd",
+                        Arguments = $"/c rmdir /s /q \"{directory}\"", // CMDプロンプトでディレクトリを削除するコマンド
+                        CreateNoWindow = true, // コンソールを開かない
+                        UseShellExecute = false, // シェル機能を使用しない
+                    };
+
+                    Process? process_ = Process.Start(processStartInfo);
+
+                    if (process_ != null)
+                    {
+                        await process_.WaitForExitAsync();
+                        process_.Close();
                     }
+
+                    UpdateProgressBar();
                 }
             });
         }
 
+        // UI要素はメインスレッドからじゃないと触れないのでlockしても意味なかった
+        private void UpdateProgressBar()
+        {
+            if (ProcessProgressBar.Dispatcher.CheckAccess())
+            {
+                ProcessProgressBar.Value = currentProcessValue;
+            }
+            else
+            {
+                ProcessProgressBar.Dispatcher.Invoke(() => ProcessProgressBar.Value = currentProcessValue);
+            }
+        }
         private void OnClosedApplication(object sender, EventArgs e)
         {
             // アプリ終了時に処理をキャンセルする

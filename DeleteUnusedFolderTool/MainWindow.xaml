@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:DeleteUnusedFolderTool"
         mc:Ignorable="d"
-        Title="DeleteUnusedFolderTool" Height="200" Width="400" AllowDrop="True" Drop="OnDropedFile" Background="{x:Null}"  Closed="OnClosedApplication">
+        Title="DeleteUnusedFolderTool" Height="200" Width="400" AllowDrop="True" Drop="OnDropedFile" Background="{x:Null}"  Closed="OnClosedApplication" ResizeMode="NoResize">
     <Grid Drop="OnDropedFile" Background="White">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto"/>
@@ -54,6 +54,12 @@
                  TextChanged="OnChangedTextBox" 
                  Drop="OnDropedFile" 
                  ScrollViewer.CanContentScroll="True"/>
-        <ProgressBar x:Name="CopyProgressBar" HorizontalAlignment="Left" Height="15" Margin="34,72,0,0" VerticalAlignment="Top" Width="301"/>
+        <ProgressBar x:Name="ProcessProgressBar" 
+                     HorizontalAlignment="Left" 
+                     Height="15" 
+                     Margin="34,72,0,0"
+                     VerticalAlignment="Top" 
+                     Width="301"
+                     Minimum="0"/>
     </Grid>
 </Window>
