@@ -1,4 +1,5 @@
 ﻿using Microsoft.WindowsAPICodePack.Dialogs;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
@@ -27,12 +28,14 @@ namespace DeleteUnusedFolderTool
 
         private int currentProcessValue;
 
-        private readonly object lockObject = new();
+        private ObservableCollection<string> deletedFolderPaths = new();
 
         public MainWindow()
         {
             InitializeComponent();
             cts = new CancellationTokenSource();
+
+            DeleteItemList.ItemsSource = deletedFolderPaths;
         }
 
         private void OnClickedTopCheckBox(object sender, RoutedEventArgs e)
@@ -95,7 +98,6 @@ namespace DeleteUnusedFolderTool
             SelectFolderPathTextBox.Clear();
             foreach (string folderPath in fileNames)
             {
-                Console.WriteLine(folderPath);
                 SelectFolderPathTextBox.Text += $"{folderPath}\n";
             }
         }
@@ -153,15 +155,19 @@ namespace DeleteUnusedFolderTool
 
                     if (!Directory.Exists(directory)) continue;
 
-                    Debug.Print($"消すフォルダパス：{directory}");
+                    DeleteItemList.Dispatcher.Invoke(() =>
+                    {
+                        deletedFolderPaths.Add(directory);
+                    });
 
                     // フォルダを削除
                     ProcessStartInfo processStartInfo = new()
                     {
                         FileName = "cmd",
-                        Arguments = $"/c rmdir /s /q \"{directory}\"", // CMDプロンプトでディレクトリを削除するコマンド
-                        CreateNoWindow = true, // コンソールを開かない
-                        UseShellExecute = false, // シェル機能を使用しない
+                        // CMDプロンプトでディレクトリを削除するコマンド
+                        Arguments = $"/c rmdir /s /q \"{directory}\"",
+                        // コンソールを開かない
+                        CreateNoWindow = true,
                     };
 
                     Process? process_ = Process.Start(processStartInfo);
@@ -177,7 +183,9 @@ namespace DeleteUnusedFolderTool
             });
         }
 
-        // UI要素はメインスレッドからじゃないと触れないのでlockしても意味なかった
+        //memo:UI要素はメインスレッドからじゃないと触れないのでlockしても意味なかった
+        // 
+
         private void UpdateProgressBar()
         {
             if (ProcessProgressBar.Dispatcher.CheckAccess())
@@ -186,13 +194,26 @@ namespace DeleteUnusedFolderTool
             }
             else
             {
-                ProcessProgressBar.Dispatcher.Invoke(() => ProcessProgressBar.Value = currentProcessValue);
+                ProcessProgressBar.Dispatcher.Invoke(() =>
+                {
+                    ProcessProgressBar.Value = currentProcessValue;
+                });
             }
         }
         private void OnClosedApplication(object sender, EventArgs e)
         {
             // アプリ終了時に処理をキャンセルする
             cts.Cancel();
+        }
+
+        private void ListBoxExpanded(object sender, RoutedEventArgs e)
+        {
+            HomeWindow.Height += DeleteItemList.Height;
+        }
+
+        private void ListBoxCollapsed(object sender, RoutedEventArgs e)
+        {
+            HomeWindow.Height -= DeleteItemList.Height;
         }
     }
 }
