@@ -12,9 +12,9 @@ namespace DeleteUnusedFolderTool
     /// </summary>
     public partial class MainWindow : Window
     {
+        // 削除するフォルダ名
         private readonly string[] deleteFolderNames =
         [
-            ".vs",
             "Library",
             "Logs",
             "obj",
@@ -22,13 +22,13 @@ namespace DeleteUnusedFolderTool
             "UserSettings"
         ];
 
-        private string[] folderPaths = [];
-
         private readonly CancellationTokenSource cts;
 
-        private int currentProcessValue;
+        private readonly ObservableCollection<string> deletedFolderPaths = [];
 
-        private ObservableCollection<string> deletedFolderPaths = new();
+        private string[] folderPaths = [];
+
+        private int currentProcessValue;
 
         public MainWindow()
         {
@@ -68,6 +68,7 @@ namespace DeleteUnusedFolderTool
 
             // フォルダが存在するか
             string[] paths = (string[])data.GetData(DataFormats.FileDrop);
+
             for (int i = 0; i < paths.Length; i++)
             {
                 if (!Directory.Exists(paths[i])) return false;
@@ -110,7 +111,7 @@ namespace DeleteUnusedFolderTool
 
         private async void OnClickedDeleteButton(object sender, RoutedEventArgs e)
         {
-            if (folderPaths == null) return;
+            // フォルダが選択されていない場合は何もしない
             if (folderPaths.Length == 0) return;
 
             await DeleteFoldersAsync(folderPaths);
@@ -124,22 +125,15 @@ namespace DeleteUnusedFolderTool
             ProcessProgressBar.Maximum = maxProcessValue;
             currentProcessValue = 0;
 
-            // マルチスレッド処理の設定
-            ParallelOptions options = new()
-            {
-                CancellationToken = cts.Token,
-                MaxDegreeOfParallelism = deleteFolderNames.Length
-            };
-
             // 非同期でフォルダを平行して削除
-            await DeleteProcessAsync(folders, options);
+            await DeleteProcessAsync(folders);
 
             ProcessProgressBar.Value = ProcessProgressBar.Maximum;
             MessageBox.Show("削除が完了しました。");
             DeleteButton.IsEnabled = true;
         }
 
-        private async Task DeleteProcessAsync(string[] unityProjectPaths, ParallelOptions options)
+        private async Task DeleteProcessAsync(string[] unityProjectPaths)
         {
             // 非同期マルチスレッドでフォルダを削除
             await Parallel.ForEachAsync(
@@ -153,8 +147,10 @@ namespace DeleteUnusedFolderTool
 
                     string directory = Path.Combine(unityProjectPath, deleteFolderName);
 
+                    // フォルダがなかったら場合はスキップ
                     if (!Directory.Exists(directory)) continue;
 
+                    // 削除したフォルダのパスを表示
                     DeleteItemList.Dispatcher.Invoke(() =>
                     {
                         deletedFolderPaths.Add(directory);
@@ -174,7 +170,7 @@ namespace DeleteUnusedFolderTool
 
                     if (process_ != null)
                     {
-                        await process_.WaitForExitAsync();
+                        await process_.WaitForExitAsync(cts.Token);
                         process_.Close();
                     }
 
@@ -184,7 +180,7 @@ namespace DeleteUnusedFolderTool
         }
 
         //memo:UI要素はメインスレッドからじゃないと触れないのでlockしても意味なかった
-        // 
+        // ProcessProgressBar.Dispatcherで代用
 
         private void UpdateProgressBar()
         {
@@ -200,20 +196,11 @@ namespace DeleteUnusedFolderTool
                 });
             }
         }
+
         private void OnClosedApplication(object sender, EventArgs e)
         {
             // アプリ終了時に処理をキャンセルする
             cts.Cancel();
-        }
-
-        private void ListBoxExpanded(object sender, RoutedEventArgs e)
-        {
-            HomeWindow.Height += DeleteItemList.Height;
-        }
-
-        private void ListBoxCollapsed(object sender, RoutedEventArgs e)
-        {
-            HomeWindow.Height -= DeleteItemList.Height;
         }
     }
 }
